@@ -1,0 +1,12 @@
+# Copy to /home/claude/shared/cron.d/<job-name>.yaml and edit.
+jobs:
+  - name: my-job-name          # unique across ALL jobs; kebab-case
+    agent: assistant           # who gets @-mentioned at fire time
+    channel: assistant         # channel the @cron bot posts into
+    schedule: "0 14 * * 1-5"   # standard 5-field cron
+    tz: Europe/London          # IANA timezone (default UTC)
+    enabled: true
+    misfire: skip              # skip (reminders) | fire_late (idempotent work)
+    prompt: |
+      Complete instruction to the agent. Include where to deliver results
+      (default: reply in the cron post's thread).

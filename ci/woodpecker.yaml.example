@@ -1,0 +1,41 @@
+# Example Woodpecker CI pipeline: build the talon image and deploy via Helm.
+# Adapt registry/repo names and the kubeconfig secret to your setup, then
+# drop it into .woodpecker/talon.yaml in the repo that drives your deploys.
+
+when:
+  - event: push
+    branch: [main]
+
+steps:
+  - name: build
+    image: woodpeckerci/plugin-docker-buildx:5
+    settings:
+      repo: registry.example.com/talon
+      registry: registry.example.com
+      tag: sha-${CI_COMMIT_SHA:0:8}
+      platforms: linux/amd64
+      provenance: false
+      # Build context is the repo root (the Dockerfile copies both
+      # channel-server/ and runtime/)
+      context: .
+      dockerfile: runtime/Dockerfile
+      cache_images:
+        - registry.example.com/talon:cache
+      # For a private registry, add username/password from_secret here.
+
+  - name: deploy
+    depends_on: [build]
+    image: alpine/helm:3
+    environment:
+      KUBECONFIG_B64:
+        from_secret: kubeconfig_b64
+    commands:
+      - echo "$KUBECONFIG_B64" | base64 -d > /tmp/kubeconfig
+      - export KUBECONFIG=/tmp/kubeconfig
+      # values-secrets.yaml holds bot tokens etc. — source it from a CI
+      # secret or a secrets manager, never from git.
+      - helm upgrade --install talon ./runtime/chart
+        --namespace talon --create-namespace
+        --set image.repository=registry.example.com/talon
+        --set image.tag=sha-${CI_COMMIT_SHA:0:8}
+        -f /run/secrets/values-secrets.yaml

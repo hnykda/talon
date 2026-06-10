@@ -1,0 +1,12 @@
+apiVersion: v2
+name: talon
+description: >-
+  Talon — persistent interactive Claude Code sessions (one per agent) in tmux,
+  bridged to Mattermost via an MCP channel server.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+sources:
+  - https://github.com/hnykda/talon
+maintainers:
+  - name: Daniel Hnyk

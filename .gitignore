@@ -1,0 +1,10 @@
+node_modules/
+*.log
+state.json
+state.json.tmp
+.mattermost-state.json
+.env
+values-secrets.yaml
+__pycache__/
+.venv/
+.DS_Store

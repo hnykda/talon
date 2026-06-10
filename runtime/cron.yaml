@@ -1,0 +1,23 @@
+# Managed cron jobs — read by runtime/tools/cron_scheduler.py (see its
+# docstring for the schema). Durable/system jobs live here (git, PR to
+# change); agents can self-schedule quick jobs in /home/claude/shared/cron.d/
+# (see the shared "scheduling" skill).
+#
+# Delivery: at fire time the `cron` bot posts the prompt into `channel`,
+# @-mentioning `agent`. The agent must list `cron` in ALLOWED_BOTS and be
+# bound to the channel. Replies thread under the cron post (audit trail).
+#
+# The whole scheduler is a no-op unless MM_BOT_TOKEN_CRON is set in the pod
+# env (create a dedicated `cron` bot account for it).
+
+jobs:
+  # Smoke test for the scheduler: flip `enabled: true`, wait <=10 minutes,
+  # and check that @assistant replies CRON_OK in the thread.
+  - name: cron-smoke-test
+    agent: assistant
+    channel: assistant
+    schedule: "*/10 * * * *"
+    tz: UTC
+    enabled: false
+    prompt: |
+      Cron smoke test: reply in this thread with "CRON_OK" and nothing else.

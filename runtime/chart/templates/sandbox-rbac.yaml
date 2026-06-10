@@ -1,0 +1,44 @@
+# Optional cluster access for the agents (requires kubectl in the image —
+# not included in the stock talon image): full admin in a dedicated sandbox
+# namespace + read-only view across the cluster.
+{{- if .Values.sandbox.enabled }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.sandbox.namespace }}
+  labels:
+    {{- include "talon.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "talon.fullname" . }}-sandbox-admin
+  namespace: {{ .Values.sandbox.namespace }}
+  labels:
+    {{- include "talon.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "talon.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- if .Values.sandbox.clusterView }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "talon.fullname" . }}-cluster-view
+  labels:
+    {{- include "talon.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "talon.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,70 @@
+# Talon agent registry — consumed by supervisor/entrypoint.sh (mikefarah yq v4).
+#
+# Each entry describes one persistent interactive Claude Code session running
+# in its own tmux session inside the pod.
+#
+# Per-agent fields:
+#   name           (required) agent name; must match a skeleton directory at
+#                  /app/runtime/agents/<name> in the image and the agent
+#                  definition in <skeleton>/.claude/agents/<name>.md
+#   enabled        (required) only enabled agents are started
+#   workdir        (optional) workspace on the PVC; defaults to
+#                  /home/claude/agents/<name>
+#   effort         (optional) session thinking effort
+#                  (low|medium|high|xhigh|max -> claude --effort). Routers
+#                  default to medium: they route, ack, and answer one-liners;
+#                  substantive work runs in subagents.
+#   botTokenEnvVar (required) name of the container env var (from the
+#                  talon-secrets Secret) holding this agent's Mattermost bot
+#                  token; the supervisor exposes it to the session as
+#                  MM_BOT_TOKEN
+#   env            (optional) extra environment for the agent session,
+#                  written into .agent-env and sourced at launch:
+#                  - channel-server config (consumed via .mcp.json ${VAR}
+#                    expansion): LISTEN_CHANNELS (names or ids; ids required
+#                    for private channels; an entry may carry a per-channel
+#                    mode suffix "<channel>:mention|all"), CHANNEL_MODE
+#                    (mention|all — the default for entries without a suffix),
+#                    ALLOWED_USERS (first entry = permission-relay admin),
+#                    DM_ENABLED, ALLOWED_BOTS (agent-to-agent messaging)
+#                  - service credentials: values of the exact form "$NAME" /
+#                    "${NAME}" are dereferenced against the POD env at render
+#                    time, so secrets can be aliased per agent (e.g.
+#                    GH_TOKEN: "$GH_TOKEN_OPS"). NOTE: this is aliasing,
+#                    not isolation — tmux sessions inherit the full pod env.
+#                  Keep all values single-line.
+#
+# Adding an agent = add a skeleton dir under runtime/agents/<name>/, add an
+# entry here, create the Mattermost bot account (System Console), add its bot
+# token to your deploy values (secrets.extra), rebuild + deploy. See the
+# top-level README "Adding a third agent".
+
+agents:
+  # assistant — a general helper. Mention-gated in its channel, DMs enabled.
+  - name: assistant
+    enabled: true
+    effort: medium
+    botTokenEnvVar: MM_BOT_TOKEN_ASSISTANT
+    env:
+      LISTEN_CHANNELS: "assistant"
+      CHANNEL_MODE: "mention"
+      ALLOWED_USERS: "alice,bob"   # alice (first) is the permission-relay admin
+      DM_ENABLED: "true"
+      ALLOWED_BOTS: "ops,cron"
+
+  # ops — second example. Hears EVERY message in #ops (mode all), but only
+  # mentions in #incidents (per-channel ":mention" suffix overrides
+  # CHANNEL_MODE). Higher effort, can be messaged by @assistant.
+  - name: ops
+    enabled: true
+    effort: high
+    botTokenEnvVar: MM_BOT_TOKEN_OPS
+    env:
+      LISTEN_CHANNELS: "ops,incidents:mention"
+      CHANNEL_MODE: "all"
+      ALLOWED_USERS: "alice"
+      DM_ENABLED: "true"
+      ALLOWED_BOTS: "assistant,cron"
+      # Example of secret aliasing — uncomment and add GH_TOKEN_OPS to
+      # secrets.extra in your deploy values:
+      # GH_TOKEN: "$GH_TOKEN_OPS"

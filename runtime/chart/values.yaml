@@ -1,0 +1,124 @@
+# talon Helm chart values
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # Set to wherever you push the image, e.g. ghcr.io/<you>/talon
+  repository: ""
+  # REQUIRED — set explicitly, e.g. --set image.tag=sha-xxxxxxxx
+  tag: ""
+  pullPolicy: Always
+
+# Plain (non-secret) environment for the pod. MM_URL is consumed by the
+# channel server via .mcp.json ${MM_URL} expansion.
+env:
+  MM_URL: "http://mattermost-team-edition.apps:8065"
+  TZ: "UTC"
+  # MCP server startup timeout (ms). The mattermost channel-server only
+  # completes its stdio handshake after reaching Mattermost; pod-boot network
+  # races can take >30s (the default), and Claude Code never relaunches a
+  # timed-out MCP server. Must exceed the channel-server's init retry budget
+  # (~100s).
+  MCP_TIMEOUT: "120000"
+  # Calmer compaction for long-lived sessions (optional).
+  # CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "75"
+
+# Supervisor tuning (all optional, see runtime/supervisor/entrypoint.sh).
+# TALON_CHANNELS_AUTOCONFIRM=1 blindly accepts the recurring
+# `--dangerously-load-development-channels` confirmation dialog so headless
+# pod restarts don't block on it.
+supervisor: {}
+#  TALON_HEALTH_INTERVAL: "30"
+#  TALON_CHANNELS_AUTOCONFIRM: "1"
+
+# Secret material rendered into the `talon-secrets` Secret (exposed to the
+# pod via envFrom). Pass real values via a separate values file at deploy
+# time (e.g. -f values-secrets.yaml) — never commit them.
+secrets:
+  # Anthropic auth: by default NONE — the pod uses claude.ai Max credentials
+  # seeded once interactively on the PVC (see README "First-boot auth").
+  # Optionally set a long-lived token from `claude setup-token` instead:
+  claudeCodeOAuthToken: ""
+  # Extra secret env vars (key = env var name): one Mattermost bot token per
+  # agent (matching botTokenEnvVar in runtime/agents.yaml), optionally
+  # MM_BOT_TOKEN_CRON (cron scheduler), VOYAGE_API_KEY (semantic search), and
+  # any service credentials you alias in agents.yaml env maps.
+  extra: {}
+  #  MM_BOT_TOKEN_ASSISTANT: "..."
+  #  MM_BOT_TOKEN_OPS: "..."
+
+# Use a pre-existing Secret instead of rendering one (must contain the same
+# env-var-named keys, e.g. MM_BOT_TOKEN_ASSISTANT).
+existingSecret: ""
+
+persistence:
+  enabled: true
+  # Holds Claude credentials, per-agent workdirs, and session transcripts.
+  size: 5Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  annotations: {}
+  existingClaim: ""
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  seccompProfile:
+    type: RuntimeDefault
+
+serviceAccount:
+  create: true
+  # Defaults to the fullname ("talon")
+  name: ""
+
+# Optional kubectl access for the agents: admin in a dedicated sandbox
+# namespace, read-only view cluster-wide. DISABLED by default — the stock
+# talon image does not ship kubectl; enable only if you add kubectl to the
+# image and want agents to operate on the cluster.
+sandbox:
+  enabled: false
+  namespace: talon-sandbox
+  clusterView: true
+
+revisionHistoryLimit: 3
+imagePullSecrets: []
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# NOTE: no Service and no Ingress on purpose — talon has no inbound network
+# surface; it dials out to Mattermost. Access for ops is kubectl exec only.

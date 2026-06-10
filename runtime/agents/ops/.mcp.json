@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "mattermost": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "cd /app/channel-server && exec node --import tsx src/index.ts"
+      ],
+      "env": {
+        "MM_URL": "${MM_URL:-http://mattermost-team-edition.apps:8065}",
+        "MM_BOT_TOKEN": "${MM_BOT_TOKEN}",
+        "LISTEN_CHANNELS": "${LISTEN_CHANNELS:-ops}",
+        "CHANNEL_MODE": "${CHANNEL_MODE:-all}",
+        "ALLOWED_USERS": "${ALLOWED_USERS:-}",
+        "DM_ENABLED": "${DM_ENABLED:-true}",
+        "STATE_FILE": "${STATE_FILE:-/home/claude/agents/ops/.mattermost-state.json}",
+        "ALLOWED_BOTS": "${ALLOWED_BOTS:-}"
+      }
+    }
+  }
+}

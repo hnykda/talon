@@ -1,0 +1,10 @@
+[project]
+name = "talon-tools"
+version = "0.1.0"
+description = "Python tools for the talon runtime image"
+requires-python = ">=3.14"
+dependencies = [
+    "croniter",
+    "pyyaml",
+    "sqlite-vec",
+]
