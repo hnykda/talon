@@ -314,6 +314,10 @@ kubectl -n talon exec -it deploy/talon -- tmux attach -t agent-ops  # watch an a
 
 ## Features beyond the bridge
 
+**How context works** (parallel conversations, compaction, what's recoverable,
+why it could be made lossless): [docs/context-management.md](docs/context-management.md).
+
+
 - **Thread-per-subagent router pattern.** Each agent session is one context
   window shared by all its conversations. The shipped CLAUDE.md files steer
   the main session into acting as a *router*: busy channel threads get
