@@ -2,22 +2,29 @@
 
 Run a fleet of persistent **Claude Code** agents bridged to **Mattermost**.
 
-One pod (or container) runs N persistent, *interactive* Claude Code sessions
-— one per agent — each kept alive in tmux and connected to its own Mattermost
+talon is a minimal reconstruction of the part of the OpenClaw harness its
+author actually used, rebuilt on **native Claude Code**. The reason it
+exists: a claude.ai flat-rate (Max) subscription only allows agentic use
+through Claude Code itself, so a fleet built on stock Claude Code runs on
+the subscription instead of metered API billing. Background story:
+[OpenClaw Is Dead, Long Live Claude Code Talon](https://danielhnyk.cz/openclaw-is-dead-long-live-claude-code-talon).
+
+One pod (or container) runs N persistent, *interactive* Claude Code sessions,
+one per agent, each kept alive in tmux and connected to its own Mattermost
 bot account through an MCP **channel server**. Because the sessions are
 interactive Claude Code sessions authenticated with a claude.ai Max
-subscription, usage is **flat-rate** — no per-token API billing — while every
+subscription, usage is **flat-rate**: no per-token API billing, while every
 agent keeps the full Claude Code toolbelt (Bash, file tools, MCP, skills).
 
 Two halves:
 
-- **`channel-server/`** — TypeScript MCP server implementing the Claude Code
+- **`channel-server/`**: TypeScript MCP server implementing the Claude Code
   [channels protocol](docs/channels-contract.md): forwards Mattermost posts
   into the session as channel events, exposes `reply` /
   `read_channel_history` / `read_thread` / `search_posts` tools, optional
   permission relay, typing indicator + ack reaction, catch-up after downtime.
   See [its README](channel-server/README.md) for the full env reference.
-- **`runtime/`** — everything that turns that into a deployable service:
+- **`runtime/`**: everything that turns that into a deployable service:
   the agent registry, per-agent config skeletons, the tmux supervisor,
   Dockerfile, Helm chart, cron scheduler, history archiver, CI example.
 
@@ -49,7 +56,7 @@ Two halves:
                     humans: alice, bob   (per-agent bot account, per-agent channels)
 ```
 
-Routing is configuration, not code: `runtime/agents.yaml` maps each agent to
+Routing lives in `runtime/agents.yaml`: it maps each agent to
 its bot token env var, channels, mode (`mention`/`all`), and allowed users.
 Each agent gets its own Mattermost bot identity and its own channel-server
 process, so conversations, permissions, and personalities stay isolated.
@@ -112,7 +119,7 @@ talon/
      volume (`claude login` via `kubectl exec`, see "First-boot auth"), or
    - a long-lived `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`
      (also subscription-backed), or
-   - `ANTHROPIC_API_KEY` (works, but then you're paying per token — that
+   - `ANTHROPIC_API_KEY` (works, but then you're paying per token, that
      defeats half the point).
 5. **Somewhere to run it**: a Kubernetes cluster (Helm chart included) or any
    Docker host (quickstart below).
@@ -140,10 +147,10 @@ docker exec -it talon tmux attach -t agent-assistant   # watch a session (detach
 ```
 
 Edit `runtime/agents.yaml` (channels, your usernames in `ALLOWED_USERS`)
-before building — it's baked into the image. Then @-mention `@assistant` in
+before building, it's baked into the image. Then @-mention `@assistant` in
 its channel, or DM it.
 
-## Configuration reference — `runtime/agents.yaml`
+## Configuration reference: `runtime/agents.yaml`
 
 One entry per agent:
 
@@ -162,15 +169,15 @@ One entry per agent:
 |---|---|
 | `LISTEN_CHANNELS` | Comma-separated channel **names or ids** the agent is bound to (ids are required for private channels). Empty = DMs only. Any entry may carry a per-channel mode suffix: `ops,incidents:mention` binds `ops` with the default mode and `incidents` mention-only. `:all` works the same way. |
 | `CHANNEL_MODE` | Default mode for entries without a suffix. `mention` (default): forward channel posts only when the bot is @-mentioned or the post is in a thread the bot participates in. `all`: forward every allowed post in bound channels. |
-| `ALLOWED_USERS` | Comma-separated Mattermost usernames or user ids allowed to reach the agent. This gates **every** inbound message — sender gating, never room gating. The **first entry is the permission-relay admin**: if you run without `--dangerously-skip-permissions`, permission prompts are DM'd to that user, who answers `yes <id>` / `no <id>`. |
+| `ALLOWED_USERS` | Comma-separated Mattermost usernames or user ids allowed to reach the agent. This gates **every** inbound message, sender gating, never room gating. The **first entry is the permission-relay admin**: if you run without `--dangerously-skip-permissions`, permission prompts are DM'd to that user, who answers `yes <id>` / `no <id>`. |
 | `DM_ENABLED` | Forward DMs from allowed users (`true` default). |
-| `ALLOWED_BOTS` | Bot accounts allowed for **agent-to-agent** messaging. Bot posts forward only on an explicit @-mention in a bound channel — no thread-follow, no bot DMs, regardless of mode. That asymmetry is the reply-loop damper: every round of a bot exchange requires a deliberate mention. List `cron` here to receive scheduled jobs. |
+| `ALLOWED_BOTS` | Bot accounts allowed for **agent-to-agent** messaging. Bot posts forward only on an explicit @-mention in a bound channel, no thread-follow, no bot DMs, regardless of mode. That asymmetry is the reply-loop damper: every round of a bot exchange requires a deliberate mention. List `cron` here to receive scheduled jobs. |
 
 Any other `env` key passes through to the session environment. Values of the
 exact form `"$NAME"` / `"${NAME}"` are **dereferenced against the pod env at
 render time**, so you can alias shared secrets per agent, e.g.
 `GH_TOKEN: "$GH_TOKEN_OPS"` gives this agent's `gh` the ops token while
-another agent gets a different one. Note this is aliasing, not isolation —
+another agent gets a different one. Note this is aliasing, not isolation,
 tmux sessions inherit the full pod environment (see Limitations).
 
 The full channel-server variable list (typing indicator, ack reaction, chunk
@@ -178,7 +185,7 @@ limit, state file...) is in [channel-server/README.md](channel-server/README.md)
 
 ## The two default agents (binding walkthrough)
 
-**`assistant`** — a general helper:
+**`assistant`**: a general helper:
 
 ```yaml
 - name: assistant
@@ -193,7 +200,7 @@ limit, state file...) is in [channel-server/README.md](channel-server/README.md)
     ALLOWED_BOTS: "ops,cron"          # @ops can hand things off; @cron delivers jobs
 ```
 
-**`ops`** — shows the rest of the knobs:
+**`ops`**: shows the rest of the knobs:
 
 ```yaml
 - name: ops
@@ -218,7 +225,7 @@ called by `@assistant` from any channel both bots are bound to.
    rename `.claude/agents/assistant.md` → `<name>.md` and edit the persona
    (frontmatter `name:` must match); adjust `CLAUDE.md`; fix the two
    per-agent values in `.mcp.json` (`LISTEN_CHANNELS` default and the
-   `STATE_FILE` path — it must point at `/home/claude/agents/<name>/...`).
+   `STATE_FILE` path, it must point at `/home/claude/agents/<name>/...`).
 2. **Registry:** add an entry to `runtime/agents.yaml` with
    `botTokenEnvVar: MM_BOT_TOKEN_<NAME>` and its routing `env`.
 3. **Bot account:** create the `<name>` bot in the Mattermost System Console,
@@ -236,12 +243,12 @@ docker build --platform linux/amd64 -f runtime/Dockerfile -t ghcr.io/<you>/talon
 docker push ghcr.io/<you>/talon:sha-$(git rev-parse --short HEAD)
 ```
 
-(Or wire up CI — `ci/woodpecker.yaml.example` is a working Woodpecker
+(Or wire up CI, `ci/woodpecker.yaml.example` is a working Woodpecker
 pipeline to adapt.)
 
 ### Install
 
-Create `values-secrets.yaml` (gitignored — never commit it):
+Create `values-secrets.yaml` (gitignored, never commit it):
 
 ```yaml
 secrets:
@@ -267,13 +274,13 @@ helm upgrade --install talon ./runtime/chart \
 ```
 
 The chart creates a Deployment (replicas 1, `Recreate`), a PVC mounted at
-`/home/claude` (credentials, transcripts, agent workdirs — annotated
+`/home/claude` (credentials, transcripts, agent workdirs, annotated
 `helm.sh/resource-policy: keep`), the `talon-secrets` Secret, and a
-ServiceAccount. No Service, no Ingress — talon only dials out to Mattermost.
+ServiceAccount. No Service, no Ingress, talon only dials out to Mattermost.
 `sandbox.enabled` (optional RBAC for cluster-operating agents) is **off** by
 default since the stock image ships no kubectl.
 
-### First-boot auth (claude.ai Max login) — once
+### First-boot auth (claude.ai Max login), once
 
 Skip this if you set `claudeCodeOAuthToken`. Otherwise the credentials live
 in `~/.claude*` on the PVC, seeded interactively one time:
@@ -322,13 +329,13 @@ why it could be made lossless): [docs/context-management.md](docs/context-manage
   window shared by all its conversations. The shipped CLAUDE.md files steer
   the main session into acting as a *router*: busy channel threads get
   delegated to subagents (Agent tool) with their own clean context, and the
-  router only relays replies. Prompt-level, not enforced — adapt the
+  router only relays replies. Prompt-level, not enforced, adapt the
   instructions to taste.
 - **History archives.** The supervisor periodically (default 6h,
   `TALON_ARCHIVE_INTERVAL` seconds, `0` disables) runs
   `runtime/tools/archive_transcripts.py`, incrementally ingesting all session
   transcripts (`~/.claude/projects/*/*.jsonl`) into an SQLite FTS5 archive at
-  `/home/claude/shared/talon-archive.db` with per-agent attribution — so
+  `/home/claude/shared/talon-archive.db` with per-agent attribution, so
   context compaction never permanently loses history. Agents query it via the
   shared `search-history` skill.
 - **Semantic search (optional).** With `VOYAGE_API_KEY` set, new archive
@@ -339,7 +346,7 @@ why it could be made lossless): [docs/context-management.md](docs/context-manage
 - **Cron scheduler.** With `MM_BOT_TOKEN_CRON` set (create a `cron` bot), the
   supervisor runs `runtime/tools/cron_scheduler.py` in its own tmux session.
   At fire time it posts the job prompt into the job's channel as `@cron`,
-  @-mentioning the target agent — delivery rides the normal A2A path
+  @-mentioning the target agent, delivery rides the normal A2A path
   (the agent must list `cron` in `ALLOWED_BOTS`), including catch-up replay
   if the agent was down. Durable jobs live in `runtime/cron.yaml` (git);
   agents self-schedule quick jobs by writing
@@ -363,11 +370,11 @@ why it could be made lossless): [docs/context-management.md](docs/context-manage
 - **Channels are a research preview.** Everything rides
   `--dangerously-load-development-channels`, which is experimental and may
   prompt for confirmation on every start (hence `TALON_CHANNELS_AUTOCONFIRM`,
-  which blindly types `y` — crude but effective). Flag semantics can change
+  which blindly types `y`, crude but effective). Flag semantics can change
   under you with Claude Code releases.
 - **No secret isolation between agents.** All sessions run as the same user
   in one container and inherit the full pod env. The per-agent env aliasing
-  is convenience, not a security boundary — an agent that goes looking can
+  is convenience, not a security boundary, an agent that goes looking can
   read its siblings' tokens. Don't co-host mutually untrusted agents.
 - **Permissions are skipped by default.** The supervisor launches sessions
   with `--dangerously-skip-permissions` (headless sessions can't answer
@@ -388,7 +395,7 @@ npm run probe        # full Mattermost pipeline WITHOUT Claude: prints would-for
 npm run probe -- --say <channel> "hello"   # post as the bot
 ```
 
-Channel-server rule #1: **stdout is the MCP transport — all logging goes to
+Channel-server rule #1: **stdout is the MCP transport, all logging goes to
 stderr** (`LOG_LEVEL=debug` for verbose). Routing decisions are pure
 functions in `src/router.ts`; extend rules there and add vitest cases.
 
@@ -407,4 +414,4 @@ claude --agent assistant --dangerously-load-development-channels server:mattermo
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
